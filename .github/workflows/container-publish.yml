@@ -1,0 +1,85 @@
+name: Build & publish container
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+
+concurrency: build
+
+env:
+  GIT_REMOTE_URL: ${{ github.server_url }}/${{ github.repository }}.git
+  CI_TOOLS_SETUP: https://raw.githubusercontent.com/SGSGermany/ci-tools/main/setup.sh
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        BASE_IMAGE:
+          - docker.io/alpine:3.15
+          - docker.io/alpine:3.16
+
+    env:
+      REGISTRY: ghcr.io
+      OWNER: sgsgermany
+      IMAGE: alpine
+      BASE_IMAGE: ${{ matrix.BASE_IMAGE }}
+      BUILD_ACTION: build
+
+    steps:
+      - name: Setup CI tools
+        run: |
+          . <(curl -fsS -L "$CI_TOOLS_SETUP" | bash -s ~/ci-tools)
+          echo "CI_TOOLS_PATH=$CI_TOOLS_PATH" | tee -a "$GITHUB_ENV"
+
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Log into container registry ${{ env.REGISTRY }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate container image tags
+        run: |
+          source <(./tags.sh "$GITHUB_RUN_ID.$GITHUB_RUN_NUMBER")
+          echo "VERSION=$VERSION" | tee -a "$GITHUB_ENV"
+          echo "TAGS=$TAGS" | tee -a "$GITHUB_ENV"
+
+      - name: Check for base image updates
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          BUILD_ACTION="$("$CI_TOOLS_PATH/containers/check-for-updates.sh")"
+          echo "BUILD_ACTION=$BUILD_ACTION" | tee -a "$GITHUB_ENV"
+
+      - name: Check for package updates
+        if: ${{ github.event_name == 'schedule' && env.BUILD_ACTION == '' }}
+        run: |
+          BUILD_ACTION="$(./check-for-updates.sh)"
+          echo "BUILD_ACTION=$BUILD_ACTION" | tee -a "$GITHUB_ENV"
+
+      - name: Build container image
+        if: ${{ env.BUILD_ACTION != '' }}
+        run: |
+          buildah unshare ./build.sh
+
+      - name: Container image metadata
+        run: |
+          "$CI_TOOLS_PATH/containers/get-metadata.sh" "$REGISTRY/$OWNER" "$IMAGE:${TAGS%% *}"
+
+      - name: Push container image
+        if: ${{ env.BUILD_ACTION != '' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ env.IMAGE }}
+          registry: ${{ env.REGISTRY }}/${{ env.OWNER }}
+          tags: ${{ env.TAGS }}
