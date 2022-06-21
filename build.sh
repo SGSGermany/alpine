@@ -13,32 +13,25 @@
 set -eu -o pipefail
 export LC_ALL=C
 
-cmd() {
-    echo + "$@"
-    "$@"
-    return $?
-}
+[ -v CI_TOOLS ] && [ "$CI_TOOLS" == "SGSGermany" ] \
+    || { echo "Invalid build environment: Environment variable 'CI_TOOLS' not set or invalid" >&2; exit 1; }
 
-trunc() {
-    for FILE in "$@"; do
-        if [ -f "$FILE" ]; then
-            : > "$FILE"
-        elif [ -d "$FILE" ]; then
-            find "$FILE" -mindepth 1 -delete
-        fi
-    done
-}
+[ -v CI_TOOLS_PATH ] && [ -d "$CI_TOOLS_PATH" ] \
+    || { echo "Invalid build environment: Environment variable 'CI_TOOLS_PATH' not set or invalid" >&2; exit 1; }
+
+source "$CI_TOOLS_PATH/helper/common.sh.inc"
+source "$CI_TOOLS_PATH/helper/container.sh.inc"
+source "$CI_TOOLS_PATH/helper/container-alpine.sh.inc"
 
 BUILD_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-[ -f "$BUILD_DIR/container.env" ] && source "$BUILD_DIR/container.env" \
-    || { echo "Container environment file 'container.env' not found" >&2; exit 1; }
+source "$BUILD_DIR/container.env"
 
 readarray -t -d' ' TAGS < <(printf '%s' "$TAGS")
 
-echo + "CONTAINER=\"\$(buildah from $BASE_IMAGE)\""
+echo + "CONTAINER=\"\$(buildah from $(quote "$BASE_IMAGE"))\"" >&2
 CONTAINER="$(buildah from "$BASE_IMAGE")"
 
-echo + "MOUNT=\"\$(buildah mount $CONTAINER)\""
+echo + "MOUNT=\"\$(buildah mount $(quote "$CONTAINER"))\"" >&2
 MOUNT="$(buildah mount "$CONTAINER")"
 
 cmd buildah run "$CONTAINER" -- \
@@ -47,16 +40,7 @@ cmd buildah run "$CONTAINER" -- \
 cmd buildah run "$CONTAINER" -- \
     apk upgrade
 
-echo + "trunc …/run …/tmp …/var/cache/apk …/var/tmp"
-trunc \
-    "$MOUNT/run" \
-    "$MOUNT/tmp" \
-    "$MOUNT/var/cache/apk" \
-    "$MOUNT/var/tmp"
-
-echo + "rm -f …/etc/resolv.conf"
-rm -f \
-    "$MOUNT/etc/resolv.conf"
+cleanup "$CONTAINER"
 
 cmd buildah config \
     --annotation org.opencontainers.image.title="Alpine Linux" \
@@ -69,9 +53,4 @@ cmd buildah config \
     --annotation org.opencontainers.image.base.digest="$(podman image inspect --format '{{.Digest}}' "$BASE_IMAGE")" \
     "$CONTAINER"
 
-cmd buildah commit "$CONTAINER" "localhost/$IMAGE:${TAGS[0]}"
-cmd buildah rm "$CONTAINER"
-
-for TAG in "${TAGS[@]:1}"; do
-    cmd buildah tag "localhost/$IMAGE:${TAGS[0]}" "localhost/$IMAGE:$TAG"
-done
+con_commit "$CONTAINER" "${TAGS[@]}"

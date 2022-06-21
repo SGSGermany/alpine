@@ -13,28 +13,40 @@
 set -eu -o pipefail
 export LC_ALL=C
 
-BUILD_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-[ -f "$BUILD_DIR/container.env" ] && source "$BUILD_DIR/container.env" \
-    || { echo "Container environment file 'container.env' not found" >&2; exit 1; }
+[ -v CI_TOOLS ] && [ "$CI_TOOLS" == "SGSGermany" ] \
+    || { echo "Invalid build environment: Environment variable 'CI_TOOLS' not set or invalid" >&2; exit 1; }
 
-readarray -t -d' ' TAGS < <(printf '%s' "$TAGS")
+[ -v CI_TOOLS_PATH ] && [ -d "$CI_TOOLS_PATH" ] \
+    || { echo "Invalid build environment: Environment variable 'CI_TOOLS_PATH' not set or invalid" >&2; exit 1; }
+
+source "$CI_TOOLS_PATH/helper/common.sh.inc"
+source "$CI_TOOLS_PATH/helper/chkupd.sh.inc"
+
+BUILD_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$BUILD_DIR/container.env"
+
+TAG="${TAGS%% *}"
+
+# check whether the base image was updated
+chkupd_baseimage "$REGISTRY/$OWNER/$IMAGE" "$TAG" \
+    || exit 0
 
 # pull current image
-echo + "CONTAINER=\"\$(buildah from $REGISTRY/$OWNER/$IMAGE:${TAGS[0]})\"" >&2
-CONTAINER="$(buildah from "$REGISTRY/$OWNER/$IMAGE:${TAGS[0]}" || true)"
+echo + "CONTAINER=\"\$(buildah from $(quote "$REGISTRY/$OWNER/$IMAGE:$TAG"))\"" >&2
+CONTAINER="$(buildah from "$REGISTRY/$OWNER/$IMAGE:$TAG" || true)"
 
 if [ -z "$CONTAINER" ]; then
-    echo "Failed to pull image '$REGISTRY/$OWNER/$IMAGE:${TAGS[0]}': No image with this tag found" >&2
+    echo "Failed to pull image '$REGISTRY/$OWNER/$IMAGE:$TAG': No image with this tag found" >&2
     echo "Image rebuild required" >&2
     echo "build"
     exit
 fi
 
 # run `apk update` and `apk list -u` to check for package updates
-echo + "buildah run $CONTAINER -- apk update" >&2
-buildah run "$CONTAINER" -- apk update >&2
+cmd buildah run "$CONTAINER" -- \
+    apk update >&2
 
-echo + "PACKAGE_UPGRADES=\"\$(buildah run $CONTAINER -- apk list -u)\"" >&2
+echo + "PACKAGE_UPGRADES=\"\$(buildah run $(quote "$CONTAINER") -- apk list -u)\"" >&2
 PACKAGE_UPGRADES="$(buildah run "$CONTAINER" -- apk list -u)"
 
 if [ -n "$PACKAGE_UPGRADES" ]; then

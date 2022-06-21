@@ -1,7 +1,7 @@
 Alpine Linux
 ============
 
-[`alpine`](https://ghcr.io/sgsgermany/alpine) is [@SGSGermany](https://github.com/SGSGermany)'s base image for containers based on [Alpine Linux](https://alpinelinux.org/). This image is built *daily* at 03:00 UTC on top of the [official Docker image](https://hub.docker.com/_/alpine) using [GitHub Actions](https://github.com/SGSGermany/alpine/actions/workflows/container-publish.yml).
+[`alpine`](https://ghcr.io/sgsgermany/alpine) is [@SGSGermany](https://github.com/SGSGermany)'s base image for containers based on [Alpine Linux](https://alpinelinux.org/). This image is built *daily* at 21:20 UTC on top of the [official Docker image](https://hub.docker.com/_/alpine) using [GitHub Actions](https://github.com/SGSGermany/alpine/actions/workflows/container-publish.yml).
 
 Rebuilds are triggered only if Alpine publishes a new patch release, or if one of Alpine's Mini Root Filesystem packages were updated. Currently we create images for both **Alpine 3.16** and **Alpine 3.15**. Please note that we might add or drop branches at any time.
 

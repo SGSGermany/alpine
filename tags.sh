@@ -13,34 +13,35 @@
 set -eu -o pipefail
 export LC_ALL=C
 
-ls_versions() {
-    jq -re --arg "VERSION" "$1" \
-        '.Tags[]|select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$") and startswith($VERSION + "."))' \
-        <<<"$BASE_IMAGE_REPO_TAGS" | sort_semver
-}
+[ -v CI_TOOLS ] && [ "$CI_TOOLS" == "SGSGermany" ] \
+    || { echo "Invalid build environment: Environment variable 'CI_TOOLS' not set or invalid" >&2; exit 1; }
 
-sort_semver() {
-    sed '/-/!{s/$/_/}' | sort -V -r | sed 's/_$//'
-}
+[ -v CI_TOOLS_PATH ] && [ -d "$CI_TOOLS_PATH" ] \
+    || { echo "Invalid build environment: Environment variable 'CI_TOOLS_PATH' not set or invalid" >&2; exit 1; }
+
+source "$CI_TOOLS_PATH/helper/common.sh.inc"
 
 BUILD_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-[ -f "$BUILD_DIR/container.env" ] && source "$BUILD_DIR/container.env" \
-    || { echo "Container environment file 'container.env' not found" >&2; exit 1; }
+source "$BUILD_DIR/container.env"
 
 BUILD_INFO=""
-if [ $# -gt 0 ] && [[ "${1,,}" =~ ^[a-z0-9_.-]+$ ]]; then
+if [ $# -gt 0 ] && [[ "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
     BUILD_INFO=".${1,,}"
 fi
 
-echo + "CONTAINER=\"\$(buildah from $BASE_IMAGE)\"" >&2
-CONTAINER="$(buildah from "$BASE_IMAGE" || true)"
+# pull base image
+echo + "IMAGE_ID=\"\$(podman pull $(quote "$BASE_IMAGE"))\"" >&2
+IMAGE_ID="$(podman pull "$BASE_IMAGE" || true)"
 
-if [ -z "$CONTAINER" ]; then
+if [ -z "$IMAGE_ID" ]; then
     echo "Failed to pull image '$BASE_IMAGE': No image with this tag found" >&2
     exit 1
 fi
 
-VERSION="$(buildah run "$CONTAINER" -- cat /etc/alpine-release)"
+# read Alpine's release file
+echo + "VERSION=\"\$(podman run -i --rm $IMAGE_ID cat /etc/alpine-release)\"" >&2
+VERSION="$(podman run -i --rm "$IMAGE_ID" cat /etc/alpine-release)"
+
 if [ -z "$VERSION" ]; then
     echo "Unable to read Alpine's release file '/etc/alpine-release': Unable to read from file" >&2
     exit 1
@@ -53,12 +54,22 @@ VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
 VERSION_MINOR="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
 VERSION_MAJOR="${BASH_REMATCH[1]}"
 
+# list all available tags of the base image do determine the respective latest version of a branch
+ls_versions() {
+    jq -re --arg "VERSION" "$1" \
+        '.Tags[]|select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$") and startswith($VERSION + "."))' \
+        <<<"$BASE_IMAGE_REPO_TAGS" | sort_semver
+}
+
+echo + "BASE_IMAGE_REPO_TAGS=\"\$(skopeo list-tags $(quote "docker://${BASE_IMAGE%:*}"))\"" >&2
 BASE_IMAGE_REPO_TAGS="$(skopeo list-tags "docker://${BASE_IMAGE%:*}" || true)"
+
 if [ -z "$BASE_IMAGE_REPO_TAGS" ]; then
     echo "Unable to read tags from container repository 'docker://${BASE_IMAGE%:*}'" >&2
     exit 1
 fi
 
+# build tags
 BUILD_INFO="$(date --utc +'%Y%m%d')$BUILD_INFO"
 
 TAGS=( "v$VERSION" "v$VERSION-$BUILD_INFO" )
