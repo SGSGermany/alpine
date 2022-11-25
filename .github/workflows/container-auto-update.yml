@@ -24,6 +24,7 @@ jobs:
         BASE_IMAGE:
           - docker.io/alpine:3.15
           - docker.io/alpine:3.16
+          - docker.io/alpine:3.17
       fail-fast: false
       max-parallel: 1
 
