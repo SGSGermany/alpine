@@ -34,6 +34,9 @@ CONTAINER="$(buildah from "$BASE_IMAGE")"
 echo + "MOUNT=\"\$(buildah mount $(quote "$CONTAINER"))\"" >&2
 MOUNT="$(buildah mount "$CONTAINER")"
 
+echo + "sed -i -E -e 's#^(https?://[^/]*alpinelinux.org/.*/community)$#@community \1#' …/etc/apk/repositories" >&2
+sed -i -E -e 's#^(https?://[^/]*alpinelinux.org/.*/community)$#@community \1#' "$MOUNT/etc/apk/repositories"
+
 cmd buildah run "$CONTAINER" -- \
     apk update
 
