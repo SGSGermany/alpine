@@ -26,7 +26,6 @@ jobs:
         BUILD_REF:
           - refs/heads/main
         BASE_IMAGE:
-          - docker.io/alpine:3.16
           - docker.io/alpine:3.17
           - docker.io/alpine:3.18
           - docker.io/alpine:3.19
