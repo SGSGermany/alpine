@@ -27,6 +27,7 @@ jobs:
           - docker.io/alpine:3.20
           - docker.io/alpine:3.21
           - docker.io/alpine:3.22
+          - docker.io/alpine:3.23
 
     env:
       REGISTRY: ghcr.io
