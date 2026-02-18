@@ -76,7 +76,7 @@ BASE_IMAGE_REPO_TAGS="$(skopeo list-tags "docker://${BASE_IMAGE%:*}" || true)"
 
 if ! jq -e '.Tags[]' &> /dev/null <<< "$BASE_IMAGE_REPO_TAGS"; then
     echo "Unable to read image tags from container repository 'docker://${BASE_IMAGE%:*}'" >&2
-    exit 2
+    exit 1
 fi
 
 # build tags
