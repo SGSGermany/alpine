@@ -15,13 +15,11 @@ export LC_ALL=C.UTF-8
 
 [ -v CI_TOOLS ] && [ "$CI_TOOLS" == "SGSGermany" ] \
     || { echo "Invalid build environment: Environment variable 'CI_TOOLS' not set or invalid" >&2; exit 1; }
-
 [ -v CI_TOOLS_PATH ] && [ -d "$CI_TOOLS_PATH" ] \
     || { echo "Invalid build environment: Environment variable 'CI_TOOLS_PATH' not set or invalid" >&2; exit 1; }
 
 [ -x "$(type -P podman 2>/dev/null)" ] \
     || { echo "Missing script dependency: podman" >&2; exit 1; }
-
 [ -x "$(type -P skopeo 2>/dev/null)" ] \
     || { echo "Missing script dependency: skopeo" >&2; exit 1; }
 
@@ -51,13 +49,11 @@ VERSION="$(podman run -i --rm "$IMAGE_ID" cat /etc/alpine-release)"
 if [ -z "$VERSION" ]; then
     echo "Unable to read Alpine's release file '/etc/alpine-release': Unable to read from file" >&2
     exit 1
-elif ! [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)([+~-]|$) ]]; then
+elif ! [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
     echo "Unable to read Alpine's release file '/etc/alpine-release': '$VERSION' is no valid version" >&2
     exit 1
 fi
 
-VERSION_FULL="$VERSION"
-VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
 VERSION_MINOR="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
 VERSION_MAJOR="${BASH_REMATCH[1]}"
 
@@ -94,5 +90,5 @@ if [ "$VERSION" == "$(ls_versions "$VERSION_MINOR" | head -n 1)" ]; then
 fi
 
 printf 'MILESTONE="%s"\n' "$VERSION_MINOR"
-printf 'VERSION="%s"\n' "$VERSION_FULL"
+printf 'VERSION="%s"\n' "$VERSION"
 printf 'TAGS="%s"\n' "${TAGS[*]}"

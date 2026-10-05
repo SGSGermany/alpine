@@ -15,7 +15,6 @@ export LC_ALL=C.UTF-8
 
 [ -v CI_TOOLS ] && [ "$CI_TOOLS" == "SGSGermany" ] \
     || { echo "Invalid build environment: Environment variable 'CI_TOOLS' not set or invalid" >&2; exit 1; }
-
 [ -v CI_TOOLS_PATH ] && [ -d "$CI_TOOLS_PATH" ] \
     || { echo "Invalid build environment: Environment variable 'CI_TOOLS_PATH' not set or invalid" >&2; exit 1; }
 
@@ -25,6 +24,13 @@ source "$CI_TOOLS_PATH/helper/container-alpine.sh.inc"
 
 BUILD_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$BUILD_DIR/container.env"
+
+if [ -n "${VERSION:-}" ] || [ "$MILESTONE" != "latest" ] || [ "$TAGS" != "latest" ]; then
+    [ -n "${VERSION:-}" ] && [ "$MILESTONE" != "latest" ] \
+        || { echo "Invalid build environment: Incomplete version information" >&2; exit 1; }
+    [[ "$VERSION" == "$MILESTONE."* ]] && [ "${TAGS%% *}" == "v$VERSION" ] \
+        || { echo "Invalid build environment: Contradictory version information" >&2; exit 1; }
+fi
 
 readarray -t -d' ' TAGS < <(printf '%s' "$TAGS")
 
@@ -53,6 +59,7 @@ cmd buildah config \
     --annotation org.opencontainers.image.url="https://github.com/SGSGermany/alpine" \
     --annotation org.opencontainers.image.authors="SGS Serious Gaming & Simulations GmbH" \
     --annotation org.opencontainers.image.vendor="SGS Serious Gaming & Simulations GmbH" \
+    --annotation org.opencontainers.image.version="${VERSION:-}" \
     --annotation org.opencontainers.image.base.name="$BASE_IMAGE" \
     --annotation org.opencontainers.image.base.digest="$(podman image inspect --format '{{.Digest}}' "$BASE_IMAGE")" \
     --annotation org.opencontainers.image.created="$(date -u +'%+4Y-%m-%dT%H:%M:%SZ')" \
